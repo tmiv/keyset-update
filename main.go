@@ -255,6 +255,7 @@ func main() {
 			if err != nil {
 				fmt.Printf("Unauthorized %v\n", err)
 				w.WriteHeader(http.StatusUnauthorized)
+				return
 			}
 			next(w, r)
 		}
