@@ -15,12 +15,10 @@ import (
 	sm "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	"github.com/golang-collections/collections/set"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwk"
 	"github.com/rs/cors"
-	"github.com/xenitab/go-oidc-middleware/oidctoken"
-	"github.com/xenitab/go-oidc-middleware/options"
+	ovm "github.com/tmiv/oidc-verify-middleware"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -214,52 +212,8 @@ func createSecret(ctx context.Context, secret_name string, project_name string, 
 	return activesecret, nil
 }
 
-type EmailClaims struct {
-	Email string `json:"email"`
-}
-
-func emailAllowedValidator() options.ClaimsValidationFn[EmailClaims] {
-	allow_env := strings.Split(os.Getenv("SECURITY_ALLOW"), ",")
-	allow_list := set.New()
-	for _, s := range allow_env {
-		allow_list.Insert(s)
-	}
-	return func(claims *EmailClaims) error {
-		if allow_list.Has(claims.Email) {
-			return nil
-		} else {
-			return fmt.Errorf("%s is not on the allow list", claims.Email)
-		}
-	}
-}
-
 func main() {
-	oidctok, err := oidctoken.New[EmailClaims](
-		emailAllowedValidator(),
-		options.WithIssuer(os.Getenv("SECURITY_ISSUER")),
-		options.WithRequiredTokenType("JWT"),
-		options.WithRequiredAudience(os.Getenv("SECURITY_AUDIENCE")),
-	)
-	if err != nil {
-		log.Fatalf("Error creating token parser %+v\n", err)
-	}
-	oidcmiddle := func(next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
-		return func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
-				fmt.Printf("No bearer %s\n", auth)
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			_, err = oidctok.ParseToken(r.Context(), auth[7:])
-			if err != nil {
-				fmt.Printf("Unauthorized %v\n", err)
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			next(w, r)
-		}
-	}
+	oidcmiddle := ovm.SetupOIDCMiddleware("")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/Update", oidcmiddle(update))
 	mux.HandleFunc("/v1/Create", oidcmiddle(create))
