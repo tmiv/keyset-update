@@ -72,7 +72,7 @@ func setupcors() *cors.Cors {
 }
 
 func makeSymmRawKey(key jwk.SymmetricKey) error {
-	rawkey := make([]byte, 32)
+	rawkey := make([]byte, 64)
 	if _, err := io.ReadFull(rand.Reader, rawkey); err != nil {
 		return err
 	}
@@ -93,6 +93,7 @@ func addNewKeyToKeyset(ctx context.Context, set jwk.Set) {
 	}
 	key := jwk.NewSymmetricKey()
 	key.Set("kid", uuid.NewString())
+	key.Set("alg", "HS512")
 	makeSymmRawKey(key)
 	set.Add(key)
 }
